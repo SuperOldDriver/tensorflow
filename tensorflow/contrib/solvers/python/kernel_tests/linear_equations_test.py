@@ -19,6 +19,7 @@ from __future__ import print_function
 
 import numpy as np
 
+from tensorflow.python import tf2
 from tensorflow.contrib.solvers.python.ops import linear_equations
 from tensorflow.contrib.solvers.python.ops import util
 from tensorflow.python.framework import constant_op
@@ -47,14 +48,14 @@ def _get_linear_equations_tests(dtype_, use_static_shape_, shape_):
     a_np = np.dot(a_np.T, a_np)
     # jacobi preconditioner
     jacobi_np = np.zeros_like(a_np)
-    jacobi_np[range(a_np.shape[0]), range(a_np.shape[1])] = (1.0 /
-                                                             a_np.diagonal())
+    jacobi_np[range(a_np.shape[0]), range(a_np.shape[1])] = (
+        1.0 / a_np.diagonal())
     rhs_np = np.random.uniform(
         low=-1.0, high=1.0, size=shape_[0]).astype(dtype_)
     x_np = np.zeros_like(rhs_np)
     tol = 1e-6 if dtype_ == np.float64 else 1e-3
     max_iter = 20
-    with self.test_session() as sess:
+    with self.cached_session() as sess:
       if use_static_shape_:
         a = constant_op.constant(a_np)
         rhs = constant_op.constant(rhs_np)
@@ -66,18 +67,30 @@ def _get_linear_equations_tests(dtype_, use_static_shape_, shape_):
         x = array_ops.placeholder(dtype_)
         jacobi = array_ops.placeholder(dtype_)
       operator = util.create_operator(a)
-      preconditioners = [None, util.identity_operator(a),
-                         util.create_operator(jacobi)]
+      preconditioners = [
+          None, util.identity_operator(a),
+          util.create_operator(jacobi)
+      ]
       cg_results = []
       for preconditioner in preconditioners:
         cg_graph = linear_equations.conjugate_gradient(
-            operator, rhs, preconditioner=preconditioner,
-            x=x, tol=tol, max_iter=max_iter)
+            operator,
+            rhs,
+            preconditioner=preconditioner,
+            x=x,
+            tol=tol,
+            max_iter=max_iter)
         if use_static_shape_:
           cg_val = sess.run(cg_graph)
         else:
-          cg_val = sess.run(cg_graph, feed_dict={a: a_np, rhs: rhs_np, x: x_np,
-                                                 jacobi: jacobi_np})
+          cg_val = sess.run(
+              cg_graph,
+              feed_dict={
+                  a: a_np,
+                  rhs: rhs_np,
+                  x: x_np,
+                  jacobi: jacobi_np
+              })
         norm_r0 = np.linalg.norm(rhs_np)
         norm_r = np.linalg.norm(cg_val.r)
         self.assertLessEqual(norm_r, tol * norm_r0)
@@ -101,7 +114,8 @@ def _get_linear_equations_tests(dtype_, use_static_shape_, shape_):
 if __name__ == "__main__":
   for dtype in np.float32, np.float64:
     for size in 1, 4, 10:
-      for use_static_shape in True, False:
+      # TF2 does not support placeholders under eager so we skip it
+      for use_static_shape in set([True, tf2.enabled()]):
         shape = [size, size]
         arg_string = "%s_%s_staticshape_%s" % (dtype.__name__, size,
                                                use_static_shape)

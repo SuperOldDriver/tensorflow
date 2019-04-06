@@ -20,7 +20,7 @@ from __future__ import print_function
 
 from setuptools import setup
 
-_VERSION = '1.4.3-a2'
+_VERSION = '1.12.0'
 
 CONSOLE_SCRIPTS = [
     'capture_tpu_profile=cloud_tpu_profiler.main:run_main',
@@ -33,7 +33,7 @@ setup(
     long_description='Tools for capture TPU profile',
     url='https://www.tensorflow.org/tfrc/',
     author='Google Inc.',
-    author_email='opensource@google.com',
+    author_email='packages@tensorflow.org',
     packages=['cloud_tpu_profiler'],
     package_data={
         'cloud_tpu_profiler': ['data/*'],
@@ -46,21 +46,17 @@ setup(
         #   3 - Alpha
         #   4 - Beta
         #   5 - Production/Stable
-        'Development Status :: 4 - Beta',
-        
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
         'Intended Audience :: Education',
         'Intended Audience :: Science/Research',
-        
         'License :: OSI Approved :: Apache Software License',
-        
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
-        
         'Topic :: Scientific/Engineering',
         'Topic :: Scientific/Engineering :: Mathematics',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
@@ -69,4 +65,5 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
     license='Apache 2.0',
-    keywords='tensorflow performance tpu',)
+    keywords='tensorflow performance tpu',
+)

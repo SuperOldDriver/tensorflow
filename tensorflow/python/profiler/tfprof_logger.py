@@ -30,6 +30,7 @@ from tensorflow.python.framework import ops
 from tensorflow.python.framework import tensor_shape
 from tensorflow.python.platform import gfile
 from tensorflow.python.profiler.internal import flops_registry  # pylint: disable=unused-import
+from tensorflow.python.util.tf_export import tf_export
 
 TRAINABLE_VARIABLES = '_trainable_variables'
 REGISTERED_FLOP_STATS = 'flops'
@@ -92,7 +93,7 @@ def _get_logged_ops(graph, run_meta=None, add_trace=True,
 
   op_missing_shape = 0
   logged_ops = {}
-  string_to_id = dict()
+  string_to_id = {}
   string_to_id['none'] = len(string_to_id)
   # TODO(xpan): Work with Profiler more efficiently.
   for op in graph.get_operations():
@@ -155,7 +156,7 @@ def merge_default_with_oplog(graph, op_log=None, run_meta=None,
   Returns:
     tmp_op_log: Merged OpLogProto proto.
   """
-  if not graph and context.in_graph_mode():
+  if not graph and not context.executing_eagerly():
     graph = ops.get_default_graph()
 
   tmp_op_log = tfprof_log_pb2.OpLogProto()
@@ -168,7 +169,7 @@ def merge_default_with_oplog(graph, op_log=None, run_meta=None,
   if not op_log:
     tmp_op_log.log_entries.extend(logged_ops.values())
   else:
-    all_ops = dict()
+    all_ops = {}
     for entry in op_log.log_entries:
       all_ops[entry.name] = entry
     for op_name, entry in six.iteritems(logged_ops):
@@ -187,6 +188,7 @@ def merge_default_with_oplog(graph, op_log=None, run_meta=None,
   return tmp_op_log
 
 
+@tf_export(v1=['profiler.write_op_log'])
 def write_op_log(graph, log_dir, op_log=None, run_meta=None, add_trace=True):
   """Log provided 'op_log', and add additional model information below.
 
@@ -208,7 +210,7 @@ def write_op_log(graph, log_dir, op_log=None, run_meta=None, add_trace=True):
     add_trace: Whether to add python code trace information.
         Used to support "code" view.
   """
-  if not graph and context.in_graph_mode():
+  if not graph and not context.executing_eagerly():
     graph = ops.get_default_graph()
   op_log = merge_default_with_oplog(graph, op_log, run_meta, add_trace)
 

@@ -113,8 +113,9 @@ const ShowMultiNode* TFOp::ShowInternal(const Options& opts,
     root_->formatted_str = FormatNode(root_.get(), root_.get(), opts);
   }
   if (timeline) {
-    fprintf(stderr, "op view doesn't support timeline yet. "
-                    "Consider graph/scope/code view.\n");
+    fprintf(stderr,
+            "op view doesn't support timeline yet. "
+            "Consider graph/scope/code view.\n");
     return root_.get();
   }
   if (cnodes_map_.empty()) {
@@ -181,7 +182,7 @@ const ShowMultiNode* TFOp::ShowInternal(const Options& opts,
     // TODO(xpan): Is it the right choice?
     root_->formatted_str = display_str;
   }
-  // Populate the chidren field.
+  // Populate the children field.
   auto* pre_pb = root_->mutable_proto();
   for (auto& show_node : show_nodes) {
     pre_pb->clear_children();
@@ -265,9 +266,9 @@ string TFOp::FormatNode(OpNode* node, OpNode* root, const Options& opts) const {
     double pct = 0.0;
     if (node->proto().total_parameters() > 0) {
       accu_pct = 100.0 * node->proto().total_parameters() /
-          root->proto().total_parameters();
-      pct = 100.0 * node->proto().parameters() /
-          root->proto().total_parameters();
+                 root->proto().total_parameters();
+      pct =
+          100.0 * node->proto().parameters() / root->proto().total_parameters();
     }
     attrs.push_back(strings::Printf(
         "%30s",
@@ -282,9 +283,8 @@ string TFOp::FormatNode(OpNode* node, OpNode* root, const Options& opts) const {
     double pct = 0.0;
     if (node->proto().total_float_ops() > 0) {
       accu_pct = 100.0 * node->proto().total_float_ops() /
-          root->proto().total_float_ops();
-      pct = 100.0 * node->proto().float_ops() /
-          root->proto().total_float_ops();
+                 root->proto().total_float_ops();
+      pct = 100.0 * node->proto().float_ops() / root->proto().total_float_ops();
     }
 
     attrs.push_back(strings::Printf(

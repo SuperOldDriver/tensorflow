@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#include <cmath>
 #define EIGEN_USE_THREADS
 
 #include <limits>
@@ -385,8 +386,12 @@ void TestQuantizedToFloatInPlaceUsingEigen(
   // These are the float values we're going to test the conversions on.
   typedef std::pair<float, float> FPair;
   for (FPair min_and_max : std::vector<FPair>{
-           FPair(-255.0f, 255.0f), FPair(-1.0f, 1.0f), FPair(-1.0f, 255.0f),
-           FPair(0.0f, 1e6), FPair(0.0f, 1.0f), FPair(-31.0f, 13.0f),
+           FPair(-255.0f, 255.0f),
+           FPair(-1.0f, 1.0f),
+           FPair(-1.0f, 255.0f),
+           FPair(0.0f, 1e6),
+           FPair(0.0f, 1.0f),
+           FPair(-31.0f, 13.0f),
            FPair(-5.89505e+08, 5.89505e+08),
        }) {
     const float f_min = min_and_max.first;
@@ -495,7 +500,7 @@ void TestAvoidBias() {
   const float step_size = (max - min) / 255.0f;
   const float tolerance = step_size / 1000.0f;
   // This is the smallest perfectly representable float in the range.
-  float first_float = ceil(min / step_size) * step_size;
+  float first_float = std::ceil(min / step_size) * step_size;
   for (float f = first_float; f <= max; f += step_size) {
     const int as_int = FloatToQuantized<quint8>(f, min, max);
     const float back_to_float = QuantizedToFloat<quint8>(as_int, min, max);

@@ -18,12 +18,12 @@ limitations under the License.
 
 #ifdef TENSORFLOW_USE_MPI
 
-#include <queue>
-#include <thread>
 #include <list>
-#include <string>
-#include <memory>
 #include <map>
+#include <memory>
+#include <queue>
+#include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -33,6 +33,7 @@ limitations under the License.
 #include "tensorflow/contrib/mpi/mpi_msg.pb.h"
 #include "tensorflow/contrib/mpi/mpi_utils.h"
 #include "tensorflow/core/distributed_runtime/base_rendezvous_mgr.h"
+#include "tensorflow/core/distributed_runtime/recent_request_ids.h"
 #include "tensorflow/core/distributed_runtime/request_id.h"
 #include "tensorflow/core/distributed_runtime/worker_env.h"
 #include "tensorflow/core/protobuf/worker.pb.h"
@@ -70,7 +71,7 @@ class MPISendTensorCall {
 
   void Init(const Rendezvous::ParsedKey& parsed, const int64 step_id,
             const bool is_dead) {
-    mRes_.set_key(parsed.FullKey().ToString());
+    mRes_.set_key(string(parsed.FullKey()));
     mRes_.set_step_id(step_id);
     mRes_.mutable_response()->set_is_dead(is_dead);
     mRes_.mutable_response()->set_send_start_micros(
@@ -160,7 +161,8 @@ class MPIRendezvousMgr : public BaseRendezvousMgr {
  private:
   typedef std::function<MPISendTensorCall*(
       const Status&, const Rendezvous::Args&, const Rendezvous::Args&,
-      const Tensor&, const bool, MPISendTensorCall*)> MPIRecvTensorCallBack;
+      const Tensor&, const bool, MPISendTensorCall*)>
+      MPIRecvTensorCallBack;
 
   typedef std::pair<std::string, std::function<void()>> RequestQueueEntry;
   typedef std::pair<std::string, std::function<MPISendTensorCall*()>>

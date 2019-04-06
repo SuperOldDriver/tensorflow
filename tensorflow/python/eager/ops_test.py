@@ -17,11 +17,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import threading
+import weakref
+
 import numpy as np
 
 from tensorflow.python.eager import context
 from tensorflow.python.eager import execute
 from tensorflow.python.eager import test
+from tensorflow.python.framework import config
 from tensorflow.python.framework import constant_op
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
@@ -130,8 +134,12 @@ class OpsTest(test_util.TensorFlowTestCase):
                                    dtype=dtypes.int64)
     values = constant_op.constant([2, 3, 5, 7, 11])
     shape = constant_op.constant([2, 7], dtype=dtypes.int64)
-    result = sparse_ops.gen_sparse_ops._sparse_split(  # pylint: disable=protected-access
-        split_dim, indices, values, shape, num_split=2)
+    result = sparse_ops.gen_sparse_ops.sparse_split(
+        split_dim,
+        indices,
+        values,
+        shape,
+        num_split=2)
     output_indices, output_values, output_shape = result
     self.assertEqual(2, len(output_indices))
     self.assertEqual(2, len(output_values))
@@ -158,31 +166,36 @@ class OpsTest(test_util.TensorFlowTestCase):
     self.assertAllEqual(3, three_x)
 
   def testOperatorOverrides(self):
-    # TODO(henrytan): test with negative number.
-    a = constant_op.constant([1])
-    b = constant_op.constant([2])
 
-    self.assertAllEqual((-a), [-1])
-    self.assertAllEqual(abs(b), [2])
+    def ops_test(v1, v2):
+      a = constant_op.constant(v1)
+      b = constant_op.constant(v2)
 
-    self.assertAllEqual((a + b), [3])
-    self.assertAllEqual((a - b), [-1])
-    self.assertAllEqual((a * b), [2])
-    self.assertAllEqual((a * a), [1])
+      self.assertAllEqual((-a), np.negative(v1))
+      self.assertAllEqual(abs(b), np.absolute(v2))
 
-    self.assertAllEqual((a**b), [1])
-    self.assertAllEqual((a / b), [1 / 2])
-    self.assertAllEqual((a / a), [1])
-    self.assertAllEqual((a % b), [1])
+      self.assertAllEqual((a + b), np.add(v1, v2))
+      self.assertAllEqual((a - b), np.subtract(v1, v2))
+      self.assertAllEqual((a * b), np.multiply(v1, v2))
+      self.assertAllEqual((a * a), np.multiply(v1, v1))
 
-    self.assertAllEqual((a < b), [True])
-    self.assertAllEqual((a <= b), [True])
-    self.assertAllEqual((a > b), [False])
-    self.assertAllEqual((a >= b), [False])
-    self.assertAllEqual((a == b), False)
-    self.assertAllEqual((a != b), True)
+      if all(x >= 0 for x in v2):
+        self.assertAllEqual((a**b), np.power(v1, v2))
+      self.assertAllEqual((a / b), np.true_divide(v1, v2))
 
-    self.assertAllEqual(1, a[constant_op.constant(0)])
+      self.assertAllEqual((a / a), np.true_divide(v1, v1))
+      self.assertAllEqual((a % b), np.mod(v1, v2))
+
+      self.assertAllEqual((a < b), np.less(v1, v2))
+      self.assertAllEqual((a <= b), np.less_equal(v1, v2))
+      self.assertAllEqual((a > b), np.greater(v1, v2))
+      self.assertAllEqual((a >= b), np.greater_equal(v1, v2))
+      self.assertAllEqual((a == b), np.equal(v1, v2)[0])
+      self.assertAllEqual((a != b), np.not_equal(v1, v2)[0])
+      self.assertAllEqual(v1[0], a[constant_op.constant(0)])
+
+    ops_test([1, 4, 8], [2, 3, 5])
+    ops_test([1, -4, -5], [-2, 3, -6])
 
   def test_basic_slice(self):
     npt = np.arange(1, 19, dtype=np.float32).reshape(3, 2, 3)
@@ -266,12 +279,31 @@ class OpsTest(test_util.TensorFlowTestCase):
     # Temporarily replace the context
     # pylint: disable=protected-access
     del context._context
+    context._context = context.Context()
     try:
-      context._context = context.Context(
-          device_policy=context.DEVICE_PLACEMENT_SILENT)
+      config.set_device_policy('silent')
       cpu_tensor = constant_op.constant(1.0)
       gpu_tensor = cpu_tensor.gpu()
       self.assertAllEqual(cpu_tensor + gpu_tensor, 2.0)
+    finally:
+      del context._context
+      context._context = context.Context()
+    # pylint: enable=protected-access
+
+  def testSoftPlacement(self):
+    if not context.context().num_gpus():
+      self.skipTest('No GPUs found')
+    # Temporarily replace the context
+    # pylint: disable=protected-access
+    del context._context
+    context._context = context.Context()
+    try:
+      config.set_device_policy('silent')
+      config.set_soft_device_placement(True)
+      cpu_tensor = constant_op.constant(1.0)
+      result = cpu_tensor + cpu_tensor
+      self.assertEqual(result.device,
+                       '/job:localhost/replica:0/task:0/device:GPU:0')
     finally:
       del context._context
       context._context = context.Context()
@@ -345,12 +377,58 @@ class OpsTest(test_util.TensorFlowTestCase):
     with self.assertRaises(TypeError):
       float(x)
 
+  def testRange(self):
+    x = constant_op.constant(2)
+    self.assertEqual([0, 1], list(range(x)))
+
   def testFormatString(self):
     x = constant_op.constant(3.1415)
     self.assertEqual('3.14', '{:.2f}'.format(x))
 
   def testNoOpIsNone(self):
     self.assertTrue(control_flow_ops.no_op() is None)
+
+  def testEagerContextPreservedAcrossThreads(self):
+    def init_fn():
+      self.assertTrue(context.executing_eagerly())
+      with ops.init_scope():
+        self.assertTrue(context.executing_eagerly())
+        context_switches = context.context().context_switches
+        self.assertEqual(len(context_switches.stack), 1)
+        self.assertFalse(context_switches.stack[0].is_building_function)
+        self.assertEqual(context_switches.stack[0].enter_context_fn,
+                         context.eager_mode)
+
+    self.assertTrue(context.executing_eagerly())
+    t1 = threading.Thread(target=init_fn)
+    t1.start()
+    t1.join()
+
+  def testWeakrefEagerTensor(self):
+    x = constant_op.constant([[1.]])
+    x.at1 = constant_op.constant([[2.]])
+    x.at2 = 3.
+    weak_x = weakref.ref(x)
+    weak_xat1 = weakref.ref(x.at1)
+    del x
+    self.assertIs(weak_x(), None)
+    self.assertIs(weak_xat1(), None)
+
+  def testWeakKeyDictionaryTensor(self):
+    weak_key_dict = weakref.WeakKeyDictionary()
+    strong_x = constant_op.constant([[1.]])
+    strong_y = constant_op.constant([[2.]])
+    weak_key_dict[strong_x] = constant_op.constant([[3.]])
+    weak_key_dict[strong_y] = constant_op.constant([[4.]])
+    strong_y.a = constant_op.constant([[5.]])
+    weak_x = weakref.ref(strong_x)
+    del strong_x
+    self.assertIs(weak_x(), None)
+    self.assertEqual([strong_y], list(weak_key_dict))
+    self.assertEqual(1, len(list(weak_key_dict)))
+    self.assertEqual(1, len(weak_key_dict))
+    del strong_y
+    self.assertEqual([], list(weak_key_dict))
 
 
 if __name__ == '__main__':
